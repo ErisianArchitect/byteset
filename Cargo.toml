@@ -2,8 +2,11 @@
 name = "byteset"
 description = "A low-overhead byte set."
 authors = ["ErisianArchitect <https://github.com/ErisianArchitect>"]
-version = "0.1.0"
+version = "1.0.0"
 edition = "2024"
 repository = "https://github.com/ErisianArchitect/byteset"
 documentation = "https://docs.rs/byteset"
 license = "MIT"
+
+[dependencies]
+utf8next = "1.0.0"

@@ -4,4 +4,13 @@ version = 4
 
 [[package]]
 name = "byteset"
-version = "0.1.0"
+version = "1.0.0"
+dependencies = [
+ "utf8next",
+]
+
+[[package]]
+name = "utf8next"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d157fd43313b7e6e5a670cada04d3a74eef0d331b7a63402a3f18df05de7d691"
