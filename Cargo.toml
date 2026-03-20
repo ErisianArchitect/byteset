@@ -7,7 +7,3 @@ edition = "2024"
 repository = "https://github.com/ErisianArchitect/byteset"
 documentation = "https://docs.rs/byteset"
 license = "MIT"
-
-[dependencies]
-lolevel = "0.1.0"
-utf8next = "1.0.0"
