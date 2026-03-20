@@ -1,8 +1,4 @@
-mod const_str_iter;
-
 use std::{mem::transmute, ops::RangeInclusive};
-
-use const_str_iter::*;
 
 #[must_use]
 #[inline]
@@ -26,12 +22,14 @@ const fn copy_range(range: &RangeInclusive<u8>) -> RangeInclusive<u8> {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 struct ByteSetMasks(u64, u64, u64, u64);
 
+#[repr(C)]
 #[derive(Clone, Copy)]
 union ByteSetUnion {
     ints: [u64; 4],
     masks: ByteSetMasks,
 }
 
+#[repr(transparent)]
 #[derive(Clone, Copy)]
 pub struct ByteSet(ByteSetUnion);
 
@@ -43,6 +41,7 @@ impl Default for ByteSet {
 }
 
 impl std::fmt::Debug for ByteSet {
+    #[inline]
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         // SAFETY: Each union field has same layout and are both Copy.
         unsafe { std::fmt::Debug::fmt(&self.0.ints, f) }
@@ -50,10 +49,12 @@ impl std::fmt::Debug for ByteSet {
 }
 
 impl PartialEq<ByteSet> for ByteSet {
+    #[inline]
     fn eq(&self, other: &ByteSet) -> bool {
         self.eq(other)
     }
 
+    #[inline]
     fn ne(&self, other: &ByteSet) -> bool {
         self.ne(other)
     }
@@ -62,6 +63,7 @@ impl PartialEq<ByteSet> for ByteSet {
 impl Eq for ByteSet {}
 
 impl std::hash::Hash for ByteSet {
+    #[inline]
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         // SAFETY: Each union field has same layout and are both Copy.
         unsafe { self.0.masks.hash(state) }
@@ -73,9 +75,7 @@ impl ByteSet {
     pub const EMPTY: Self = Self(ByteSetUnion { ints: [0; 4] });
     pub const ASCII_LOWERCASE: Self = Self::from_range(b'a'..=b'z');
     pub const ASCII_UPPERCASE: Self = Self::from_range(b'A'..=b'Z');
-    pub const ASCII_LETTERS: Self = Self::new()
-        .with_range(b'a'..=b'z')
-        .with_range(b'A'..=b'Z');
+    pub const ASCII_LETTERS: Self = Self::union(&[Self::ASCII_LOWERCASE, Self::ASCII_UPPERCASE]);
     pub const ASCII_DIGITS: Self = Self::from_range(b'0'..=b'9');
     pub const HEX_DIGITS: Self = Self::new()
         .with_range(b'a'..=b'f')
@@ -86,6 +86,7 @@ impl ByteSet {
     pub const ASCII_PRINTABLE: Self = Self::new()
         .with_range(b'\t'..=b'\r')
         .with_range(b' '..=b'~');
+    pub const ASCII_NON_PRINTABLE: Self = Self::ASCII_PRINTABLE.inverted();
     pub const ASCII_SYMBOLS: Self = Self::new()
         .with_range(b'!'..=b'/')
         .with_range(b':'..=b'@')
@@ -247,38 +248,6 @@ impl ByteSet {
         }
     }
 
-    pub const fn add_byte(&mut self, byte: u8) {
-        self.internal_set_bit_to::<true>(byte);
-    }
-    
-    pub const fn remove_byte(&mut self, byte: u8) {
-        self.internal_set_bit_to::<false>(byte)
-    }
-
-    pub const fn add_bytes(&mut self, bytes: &[u8]) {
-        self.internal_set_bytes::<true>(bytes);
-    }
-
-    pub const fn remove_bytes(&mut self, bytes: &[u8]) {
-        self.internal_set_bytes::<false>(bytes);
-    }
-
-    pub const fn set_byte(&mut self, byte: u8, value: bool) {
-        if value {
-            self.add_byte(byte);
-        } else {
-            self.remove_byte(byte);
-        }
-    }
-
-    pub const fn set_bytes(&mut self, bytes: &[u8], value: bool) {
-        if value {
-            self.add_bytes(bytes);
-        } else {
-            self.remove_bytes(bytes);
-        }
-    }
-
     #[track_caller]
     #[inline]
     const fn internal_set_range<const VALUE: bool>(&mut self, first: u8, last: u8) {
@@ -327,6 +296,38 @@ impl ByteSet {
         }
     }
 
+    pub const fn add_byte(&mut self, byte: u8) {
+        self.internal_set_bit_to::<true>(byte);
+    }
+    
+    pub const fn remove_byte(&mut self, byte: u8) {
+        self.internal_set_bit_to::<false>(byte)
+    }
+
+    pub const fn add_bytes(&mut self, bytes: &[u8]) {
+        self.internal_set_bytes::<true>(bytes);
+    }
+
+    pub const fn remove_bytes(&mut self, bytes: &[u8]) {
+        self.internal_set_bytes::<false>(bytes);
+    }
+
+    pub const fn set_byte(&mut self, byte: u8, value: bool) {
+        if value {
+            self.add_byte(byte);
+        } else {
+            self.remove_byte(byte);
+        }
+    }
+
+    pub const fn set_bytes(&mut self, bytes: &[u8], value: bool) {
+        if value {
+            self.add_bytes(bytes);
+        } else {
+            self.remove_bytes(bytes);
+        }
+    }
+
     #[track_caller]
     pub const fn add_range(&mut self, range: RangeInclusive<u8>) {
         self.internal_set_range::<true>(*range.start(), *range.end());
@@ -337,6 +338,7 @@ impl ByteSet {
         self.internal_set_range::<false>(*range.start(), *range.end());
     }
 
+    #[track_caller]
     pub const fn add_ranges(&mut self, ranges: &[RangeInclusive<u8>]) {
         let mut index = 0;
         while index < ranges.len() {
@@ -345,6 +347,7 @@ impl ByteSet {
         }
     }
 
+    #[track_caller]
     pub const fn remove_ranges(&mut self, ranges: &[RangeInclusive<u8>]) {
         let mut index = 0;
         while index < ranges.len() {
@@ -418,6 +421,7 @@ impl ByteSet {
         self
     }
 
+    #[track_caller]
     #[must_use]
     #[inline]
     pub const fn with_range(mut self, range: RangeInclusive<u8>) -> Self {
@@ -425,6 +429,7 @@ impl ByteSet {
         self
     }
 
+    #[track_caller]
     #[must_use]
     #[inline]
     pub const fn without_range(mut self, range: RangeInclusive<u8>) -> Self {
@@ -432,6 +437,7 @@ impl ByteSet {
         self
     }
 
+    #[track_caller]
     #[must_use]
     #[inline]
     pub const fn with_ranges(mut self, ranges: &[RangeInclusive<u8>]) -> Self {
@@ -439,6 +445,7 @@ impl ByteSet {
         self
     }
 
+    #[track_caller]
     #[must_use]
     #[inline]
     pub const fn without_ranges(mut self, ranges: &[RangeInclusive<u8>]) -> Self {
@@ -455,12 +462,6 @@ impl ByteSet {
     }
 
     #[must_use]
-    #[inline]
-    pub const fn has_char(&self, c: char) -> bool {
-        (c as u32) < 256 && self.has(c as u8)
-    }
-
-    #[must_use]
     pub const fn has_any(&self, bytes: &[u8]) -> bool {
         let mut index = 0;
         while index < bytes.len() {
@@ -473,34 +474,10 @@ impl ByteSet {
     }
 
     #[must_use]
-    pub const fn has_any_char(&self, chars: &[char]) -> bool {
-        let mut index = 0;
-        while index < chars.len() {
-            if self.has_char(chars[index]) {
-                return true;
-            }
-            index += 1;
-        }
-        false
-    }
-
-    #[must_use]
     pub const fn has_all(&self, bytes: &[u8]) -> bool {
         let mut index = 0;
         while index < bytes.len() {
             if !self.has(bytes[index]) {
-                return false;
-            }
-            index += 1;
-        }
-        true
-    }
-
-    #[must_use]
-    pub const fn has_all_chars(&self, chars: &[char]) -> bool {
-        let mut index = 0;
-        while index < chars.len() {
-            if !self.has_char(chars[index]) {
                 return false;
             }
             index += 1;
@@ -527,6 +504,37 @@ impl ByteSet {
         false
     }
 
+    #[must_use]
+    #[inline]
+    pub const fn has_char(&self, c: char) -> bool {
+        (c as u32) < 256 && self.has(c as u8)
+    }
+
+    #[must_use]
+    pub const fn has_any_char(&self, chars: &[char]) -> bool {
+        let mut index = 0;
+        while index < chars.len() {
+            if self.has_char(chars[index]) {
+                return true;
+            }
+            index += 1;
+        }
+        false
+    }
+
+    #[must_use]
+    pub const fn has_all_chars(&self, chars: &[char]) -> bool {
+        let mut index = 0;
+        while index < chars.len() {
+            if !self.has_char(chars[index]) {
+                return false;
+            }
+            index += 1;
+        }
+        true
+    }
+
+    #[must_use]
     pub const fn has_some_chars(&self, chars: &[char]) -> bool {
         let mut missing = false;
         let mut found = false;
@@ -572,6 +580,7 @@ impl ByteSet {
 
     #[must_use]
     pub const fn intersects(&self, other: &Self) -> bool {
+        #[must_use]
         #[inline]
         const fn intersects(lhs: u64, rhs: u64) -> bool {
             0 != lhs & rhs
@@ -584,6 +593,7 @@ impl ByteSet {
 
     #[must_use]
     pub const fn is_superset(&self, other: &Self) -> bool {
+        #[must_use]
         #[inline(always)]
         const fn is_superset(lhs: u64, rhs: u64) -> bool {
             lhs & rhs == rhs
@@ -596,6 +606,7 @@ impl ByteSet {
 
     #[must_use]
     pub const fn is_subset(&self, other: &Self) -> bool {
+        #[must_use]
         #[inline(always)]
         const fn is_subset(lhs: u64, rhs: u64) -> bool {
             lhs & rhs == lhs
@@ -606,6 +617,7 @@ impl ByteSet {
         is_subset(self.get_mask3(), other.get_mask3())
     }
 
+    #[track_caller]
     #[must_use]
     #[inline]
     pub const fn range_subset(self, range: RangeInclusive<u8>) -> Self {
@@ -613,11 +625,13 @@ impl ByteSet {
     }
 
     #[must_use]
+    #[inline]
     pub const fn iter(&self) -> ByteSetIter<'_> {
         ByteSetIter { set: self, index: 0 }
     }
 
     #[must_use]
+    #[inline]
     pub const fn to_ne_bytes(&self) -> [u8; 32] {
         unsafe {
             transmute([
@@ -630,6 +644,7 @@ impl ByteSet {
     }
 
     #[must_use]
+    #[inline]
     pub const fn to_le_bytes(&self) -> [u8; 32] {
         unsafe {
             transmute([
@@ -642,6 +657,7 @@ impl ByteSet {
     }
 
     #[must_use]
+    #[inline]
     pub const fn to_be_bytes(&self) -> [u8; 32] {
         unsafe {
             transmute([
@@ -654,6 +670,7 @@ impl ByteSet {
     }
 
     #[must_use]
+    #[inline]
     pub const fn from_ne_bytes(bytes: [u8; 32]) -> Self {
         let [c0, c1, c2, c3]: [[u8; 8]; 4] = unsafe { transmute(bytes) };
         Self(ByteSetUnion { masks: ByteSetMasks(
@@ -665,6 +682,7 @@ impl ByteSet {
     }
 
     #[must_use]
+    #[inline]
     pub const fn from_le_bytes(bytes: [u8; 32]) -> Self {
         let [c0, c1, c2, c3]: [[u8; 8]; 4] = unsafe { transmute(bytes) };
         Self(ByteSetUnion { masks: ByteSetMasks(
@@ -676,6 +694,7 @@ impl ByteSet {
     }
 
     #[must_use]
+    #[inline]
     pub const fn from_be_bytes(bytes: [u8; 32]) -> Self {
         let [c0, c1, c2, c3]: [[u8; 8]; 4] = unsafe { transmute(bytes) };
         Self(ByteSetUnion { masks: ByteSetMasks(
@@ -687,6 +706,7 @@ impl ByteSet {
     }
 
     #[must_use]
+    #[inline]
     pub const fn to_array(self) -> [u64; 4] {
         unsafe { self.0.ints }
     }
