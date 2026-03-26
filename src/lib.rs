@@ -560,9 +560,9 @@ impl ByteSet {
     }
 
     pub const fn ne(&self, other: &Self) -> bool {
-        self.get_mask0() != other.get_mask0() &&
-        self.get_mask1() != other.get_mask1() &&
-        self.get_mask2() != other.get_mask2() &&
+        self.get_mask0() != other.get_mask0() ||
+        self.get_mask1() != other.get_mask1() ||
+        self.get_mask2() != other.get_mask2() ||
         self.get_mask3() != other.get_mask3()
     }
 
