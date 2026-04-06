@@ -768,6 +768,10 @@ impl ByteSet {
         self.invert();
         self
     }
+
+    pub const fn clear(&mut self) {
+        self.0.ints = [0; 4]
+    }
 }
 
 impl std::ops::Not for ByteSet {
